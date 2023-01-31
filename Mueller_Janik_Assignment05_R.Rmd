@@ -111,7 +111,6 @@ event_venues_de <- GET("https://app.ticketmaster.com/discovery/v2/venues",
                                 "size" = 20)) %>% content # directly extracting the contents
 
 # With the size argument I can choose the page size of the response
-
 ```
 
 The response is a list with three sublists. Each of those sublists contains more information. The "page" sublist contains overall information about the response. It includes infos about the number of pages, the size of those pages and the total number of available elements in the server.
@@ -202,7 +201,7 @@ for (i in 1:64) {
                 select(name, city = name.1, postal_code = postalCode, address = line1, url, longitude = location.longitude, latitude = location.latitude)
 
     all_venues_de_df <- rbind(all_venues_de_df, temp)
-    }
+}
 
 
 
@@ -218,7 +217,18 @@ for (i in 1:36) {
     
 }
 
-# I was not able to solve this problem completely, somehow the last page is not convertible into a data-frame. I will leave them out and calulate with the data that I have:
+
+# I was not able to solve this problem completely, somehow the last page is not convertible into a data-frame. I will leave them out and calculate with the data that I have.
+
+all_venues_de_df <- all_venues_de_df %>% select(name, city, postal_code, address, url, longitude, latitude) %>% mutate(longitude = as.numeric(longitude), latitude = as.numeric(latitude))
+
+## First 10 Rows
+
+head(all_venues_de_df, n = 10)
+
+## Shape of the Data Frame
+
+dim(all_venues_de_df)
 
 ```
 
@@ -231,6 +241,22 @@ for (i in 1:36) {
 locations of the event venues across Germany.
 </div>
 
+```{r, warning=FALSE}
+
+ggplot(data = all_venues_de_df) +
+    borders("world", "Germany", colour = "black", fill = "grey90") +
+    theme_void() +
+    coord_quickmap() +
+    geom_point(mapping = aes(x = longitude, y = latitude)) +
+    labs(title = "Event locations across Germany",
+         caption = "Source: ticketmaster.com") +
+    theme(title = element_text(size = 8, face = 'bold'),
+          plot.caption = element_text(face = "italic"))
+    
+
+
+```
+
 
 
 <div class="alert alert-block alert-info">
@@ -240,6 +266,24 @@ where the value of latitude is outside the range (47.270, 55.059) (these coordin
 been derived from the extreme points of Germany as listed on Wikipedia (see here). For extreme points
 of other countries, see here).
 </div>
+
+```{r}
+# Filtering for the right latitude and longitude
+
+all_venues_de_df <- all_venues_de_df %>% filter(longitude < 15.042 & longitude > 5.866) %>% filter(latitude > 47.270 & latitude < 55.059)
+
+
+ggplot(data = all_venues_de_df) +
+    borders("world", "Germany", colour = "black", fill = "grey90") +
+    theme_void() +
+    coord_quickmap() +
+    geom_point(mapping = aes(x = longitude, y = latitude)) +
+    labs(title = "Event locations across Germany",
+         caption = "Source: ticketmaster.com") +
+    theme(title = element_text(size = 8, face = 'bold'),
+          plot.caption = element_text(face = "italic"))
+
+```
 
 
 ***
@@ -251,3 +295,157 @@ of other countries, see here).
 12. Repeat exercises (9)–(11) for another European country of your choice. (Hint: Clean code pays off! If
 you have coded the exercises efficiently, only very few adaptions need to be made.)
 </div>
+
+```{r, warning=FALSE}
+
+## I will do Luxembourg since this is where I am from 
+
+venues_lu <- GET('https://app.ticketmaster.com/discovery/v2/venues', 
+                     query = list("apikey" = api_key,
+                                 "countryCode" = "LU",
+                                 "locale" = "*",
+                                 "size" = 102)) %>% content()
+
+# Creating a DataFrame
+
+venues_lu_df <- map(venues_lu$`_embedded`$venues, .f = as.data.frame) %>% bind_rows() %>% select(name, city = name.1, postal_code = postalCode, address = line1, url, longitude = location.longitude, latitude = location.latitude) %>% mutate(longitude = as.numeric(longitude), latitude = as.numeric(latitude))
+
+
+# First 10 Rows
+
+head(venues_lu_df, n = 10)
+
+
+#Dimensions of the Data Frame
+dim(venues_lu_df)
+
+
+
+## Plotten
+
+ggplot(data = venues_lu_df) +
+    borders("world", "Luxembourg", colour = "black", fill = "grey90") +
+    theme_void() +
+    coord_quickmap() +
+    geom_point(mapping = aes(x = longitude, y = latitude)) +
+    labs(title = "Event locations across Luxembourg",
+         caption = "Source: ticketmaster.com") +
+    theme(title = element_text(size = 8, face = 'bold'),
+          plot.caption = element_text(face = "italic"))
+
+# there were no Plces outside the luxembourgish Borders
+
+```
+
+
+
+
+***
+
+### Event locations in other countries - Again
+
+
+<div class="alert alert-block alert-info">
+12. Repeat exercises (9)–(11) for another European country of your choice. (Hint: Clean code pays off! If
+you have coded the exercises efficiently, only very few adaptions need to be made.)
+</div>
+
+We are going to do: Belgium
+
+```{r}
+
+## First we are going to write a function that will perform the get request and adheres to the rate limit
+
+worker_be <- function(page){
+    # Setting the rate Limit
+          Sys.sleep(0.3)
+    # Building the request and specifying everything but the pages
+      venues <- GET('https://app.ticketmaster.com/discovery/v2/venues', 
+                     query = list("apikey" = api_key,
+                                 "countryCode" = "BE",
+                                 "locale" = "*",
+                                 "page" = page,
+                                 "size" = 20))
+      
+      
+      # Return the Information
+      return(content(venues)$`_embedded`$venues)
+}
+
+
+## Requesting the data (Attention: pages are zero indexed)
+
+# First making a small request to check the number of pages that I have to iterate over
+
+test <- GET("https://app.ticketmaster.com/discovery/v2/venues", 
+                        query = list("apikey" = api_key,
+                                "countryCode" = "BE",
+                                "locale" = "*",
+                                "page" = 0,
+                                "size" = 20)) %>% content # directly extracting the contents
+
+
+
+# I need to go over 56 pages
+
+temp_be <- tibble()
+venues_be_df <- tibble()
+
+venues_be <- map(.x = 0:55, .f = worker_be)
+## Creating a Data-Frame out of the lists
+
+for (i in 1:56) {
+    
+    temp_be <- map(.x = venues_be[[i]], as.data.frame) %>% 
+                bind_rows()
+
+    venues_be_df <- bind_rows(venues_be_df, temp_be)
+}
+
+venues_be_df <- venues_be_df %>% select(name, city = name.1, postal_code = postalCode, address = line1, url, longitude = location.longitude, latitude = location.latitude)
+
+
+venues_be_df <- venues_be_df %>% select(name, city, postal_code, address, url, longitude, latitude) %>% mutate(longitude = as.numeric(longitude), latitude = as.numeric(latitude))
+
+## First 10 Rows
+
+head(venues_be_df, n = 10)
+
+## Shape of the Data Frame
+
+dim(venues_be_df)
+
+
+
+## Now we are Plotting
+
+ggplot(data = venues_be_df) +
+    borders("world", "Belgium", colour = "black", fill = "grey90") +
+    theme_void() +
+    coord_quickmap() +
+    geom_point(mapping = aes(x = longitude, y = latitude)) +
+    labs(title = "Event locations across Germany",
+         caption = "Source: ticketmaster.com") +
+    theme(title = element_text(size = 8, face = 'bold'),
+          plot.caption = element_text(face = "italic"))
+    
+
+
+## Filtering for the right latitude and longitude
+
+venues_be_df <- venues_be_df %>% filter(longitude < 6.3831 & longitude > 2.35) %>% filter(latitude > 49.5072 & latitude < 51.4978)
+
+
+ggplot(data = venues_be_df) +
+    borders("world", "Belgium", colour = "black", fill = "grey90") +
+    theme_void() +
+    coord_quickmap() +
+    geom_point(mapping = aes(x = longitude, y = latitude)) +
+    labs(title = "Event locations across Belgium",
+         caption = "Source: ticketmaster.com") +
+    theme(title = element_text(size = 8, face = 'bold'),
+          plot.caption = element_text(face = "italic"))
+
+
+``` 
+
