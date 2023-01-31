@@ -111,10 +111,20 @@ event_venues_de <- GET("https://app.ticketmaster.com/discovery/v2/venues",
                                 "size" = 20)) %>% content # directly extracting the contents
 
 # With the size argument I can choose the page size of the response
+
+# Extracting the Content to 
+
+total_elements <- event_venues_de$page$totalElements
+size <- event_venues_de$page$size
+total_Pages <- event_venues_de$page$totalPages
+number <- event_venues_de$page$number
+
+data.frame(total_elements, size, total_Pages, number)
 ```
 
 The response is a list with three sublists. Each of those sublists contains more information. The "page" sublist contains overall information about the response. It includes infos about the number of pages, the size of those pages and the total number of available elements in the server.
 The links list gives links to my current, the next and the last dataset - overall, it links to data sets. Last but not least, the _embedded list is the container and contains the information I am interested in for the analysis.
+Coming back to the "Page" Sublist, we can see that the server has 12935 venues for our GET request overall. Size tells us how many venues are on one page, while total pages decribes how many pages there are overall. Moreover, number depicts the current page we are on.
 
 
 <div class="alert alert-block alert-info">
