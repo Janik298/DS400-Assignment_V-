@@ -154,7 +154,7 @@ this document has been last modified):
 The venue search shows us that we can specify the number of entries contained on one page and that we can specify which page we want to look at. With this information we can design a function in combination with a loop which will get the data and also tidy it.
 
 ```{r}
-# First we are going to write a function that will perform the get request and adheres to the rate limit
+## First we are going to write a function that will perform the get request and adheres to the rate limit
 
 worker <- function(page){
     # Setting the rate Limit
@@ -167,9 +167,58 @@ worker <- function(page){
                                  "page" = page,
                                  "size" = 199)) # total elements are 12935 which is just 65*199 -> set the size to 199 to get only full pages
       
+      
       # Return the Information
-      content(venues)$`_embedded`$venues
+      return(content(venues)$`_embedded`$venues)
 }
+
+
+## Requesting the data (Attention: pages are zero indexed)
+
+# First making a small request to check the number of pages that I have to iterate over
+
+test <- GET("https://app.ticketmaster.com/discovery/v2/venues", 
+                        query = list("apikey" = api_key,
+                                "countryCode" = "DE",
+                                "locale" = "*",
+                                "page" = 64,
+                                "size" = 199)) %>% content # directly extracting the contents
+
+
+
+# I need to go over 65 pages
+
+all_venues_de <- map(.x = 0:64, .f = worker) # this is now a list which contains sublists that contain the data we are interested in
+
+
+## Creating a Data-Frame out of the lists
+
+all_venues_de_df <- tibble()
+temp <- tibble()
+
+for (i in 1:64) {
+    temp <- map(.x = all_venues_de[[i]], as.data.frame) %>% 
+                bind_rows() %>% 
+                select(name, city = name.1, postal_code = postalCode, address = line1, url, longitude = location.longitude, latitude = location.latitude)
+
+    all_venues_de_df <- rbind(all_venues_de_df, temp)
+    }
+
+
+
+# There is a problem with the last page which I am going to fix by hand:
+last_page <- all_venues_de[[65]]
+
+temp_1 <- tibble()
+
+for (i in 1:36) {
+    temp_1 <- as.data.frame(last_page[[i]])
+    
+    all_venues_de_df <- bind_rows(all_venues_de_df, temp_1)
+    
+}
+
+# I was not able to solve this problem completely, somehow the last page is not convertible into a data-frame. I will leave them out and calulate with the data that I have:
 
 ```
 
